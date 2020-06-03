@@ -8,18 +8,28 @@ using namespace std;
 
 int main(int argc, char *argv[])
 {
-    int rank = 0, numProces = 0;
+    int rank = 0, numProces = 0, nameLen = 0;
+    char processName[MPI_MAX_PROCESSOR_NAME];
+    char *infoMessage;
 
     void managerCode(int numProces);
     void workerCode(void);
 
+    infoMessage = (char *) malloc(MPI_MAX_PROCESSOR_NAME + 80);
+
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &numProces);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Get_processor_name(processName, &nameLen);
+
+    sprintf(infoMessage, "\nMessage from process %d of %d on %s\n", 
+        rank, numProces, processName);
 
     if (rank == 0) {
+        printf("%s", infoMessage);
         managerCode(numProces);
     } else {
+        printf("%s", infoMessage);
         workerCode();
     }
 
@@ -28,13 +38,15 @@ int main(int argc, char *argv[])
 }
 
 void managerCode(int numProces) {
-    int a[SIZE][SIZE], c[SIZE][SIZE], prd[SIZE], numSent = 0, row = 0, sender;
+    int a[SIZE][SIZE], c[SIZE][SIZE], numSent = 0, row = 0, sender,
+    messageSize = 0, *prd;
     MPI_Status status;
 
-    //Initialize matrix a with all values equal to 2
+    //Initialize matrix a and c
     for (int i = 0; i < SIZE; i++) {
         for (int j = 0; j < SIZE; j++) {
             a[i][j] = 2;
+            c[i][j] = 0;
         }
     }
 
@@ -46,13 +58,20 @@ void managerCode(int numProces) {
 
     //Receives the product of matrix c made by workers
     for (int q = 0; q < SIZE; q++) {
-        MPI_Recv(&prd, SIZE, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+        MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+        MPI_Get_count(&status, MPI_INT, &messageSize);
+
+        prd = (int *) malloc(messageSize*sizeof(int));
+
         row = status.MPI_TAG-1;
         sender = status.MPI_SOURCE;
 
+        MPI_Recv(prd, messageSize, MPI_INT, sender, MPI_ANY_TAG, MPI_COMM_WORLD, 
+            &status);
+
         //Store the result of matrix c
         for (int col = 0; col < SIZE; col++)
-            c[row][col] = prd[col];
+            c[row][col] = *(prd+col);
 
         //While there are some lines not sent it will send them to workers
         if (numSent < SIZE) {
@@ -65,9 +84,13 @@ void managerCode(int numProces) {
 
             cout << "RESULT" << endl;
             for (int l = 0; l < SIZE; l++) {
-                for (int r = 0; r < SIZE; r++)
-                    cout << c[l][r] << (r+1 == SIZE ? '\n' : ' ');
+                for (int r = 0; r < SIZE; r++) {
+                    printf("%.3d", c[l][r]);
+                    cout << (r+1 == SIZE ? '\n' : ' ');
+                }
             }
+
+            free(prd);
         }
         
     }
