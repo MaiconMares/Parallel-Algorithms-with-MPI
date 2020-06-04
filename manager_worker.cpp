@@ -37,8 +37,8 @@ int main(int argc, char *argv[])
 }
 
 void managerCode(int numprocs) {
-    double a[SIZE][SIZE], c[SIZE], dotp = 0;
-    int i = 0, j = 0, sender = 0, row = 0, numsent = 0;
+    double a[SIZE][SIZE], c[SIZE], *dotp;
+    int i = 0, j = 0, sender = 0, row = 0, numsent = 0, count = 0;
     MPI_Status status;
 
     //Inicialização de a
@@ -55,12 +55,17 @@ void managerCode(int numprocs) {
 
     //Recebe o produto dos workers
     for (i = 0; i < SIZE; i++) {
-        MPI_Recv(&dotp, 1, MPI_DOUBLE, MPI_ANY_SOURCE, 
+        MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+        MPI_Get_count(&status, MPI_DOUBLE, &count);
+            
+        dotp = (double *) malloc(count*sizeof(double));
+
+        MPI_Recv(dotp, count, MPI_DOUBLE, MPI_ANY_SOURCE, 
                     MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-        printf("MESSAGE '%lf' from process %d of %d\n", dotp, status.MPI_SOURCE, 1000);
+        printf("MESSAGE '%lf' from process %d of %d\n", *dotp, status.MPI_SOURCE, 1000);
         sender = status.MPI_SOURCE;
         row = status.MPI_TAG-1;
-        c[row] = dotp;
+        c[row] = *dotp;
 
         /* Enviar outra linha da matriz para o worker se ainda existir 
         alguma para ser calculada */
@@ -73,6 +78,8 @@ void managerCode(int numprocs) {
             for (int i = 0; i < SIZE; i++) {
                 cout << c[i] << (i+1 == SIZE ? '\n' : ' ');
             }
+
+            free(dotp);
         }
     }
 }
